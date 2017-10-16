@@ -128,7 +128,7 @@ func main() {
 	// in files
 	listFlag := flag.Bool("list", false, "Only display a list of shebangs found")
 	flag.Usage = func() {
-		helpString := `Shebangtron: Used to rewrite python path in the lsst stack on MacOS.
+		helpString := `Shebangtron: Used to rewrite python path in the lsst stack.
              Must be run after sourceing loadLSST.<shell>`
 		fmt.Println(helpString)
 		flag.PrintDefaults()
