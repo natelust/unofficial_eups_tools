@@ -39,7 +39,7 @@ func getRemoteVersion(c chan string) {
     r, _ := regexp.Compile(">w_(\\d{4})_(\\d*).list<")
     matches := r.FindAllSubmatch(body, -1)
 
-    sort.Slice(matches, func(i, j int) bool {
+    sort.SliceStable(matches, func(i, j int) bool {
         f, _ := strconv.Atoi(string(matches[i][2]))
         fYear, _ := strconv.Atoi(string(matches[i][1]))
         s, _ := strconv.Atoi(string(matches[j][2]))
@@ -69,7 +69,7 @@ func getLocalVersion(c chan string) {
     localR, _ := regexp.Compile("w_(\\d{4})_(\\d*)")
     localMatches := localR.FindAllSubmatch(tagsOutput, -1)
 
-    sort.Slice(localMatches, func(i, j int) bool {
+    sort.SliceStable(localMatches, func(i, j int) bool {
         f, _ := strconv.Atoi(string(localMatches[i][2]))
         fYear, _ := strconv.Atoi(string(localMatches[i][1]))
         s, _ := strconv.Atoi(string(localMatches[j][2]))
@@ -80,6 +80,9 @@ func getLocalVersion(c chan string) {
             return f > s
         }
     })
+    for _,entry := range localMatches {
+        fmt.Println(string(entry[1]), string(entry[2]))
+    }
 
     // List out the latest version of the locally installed tag
     latestLocal := fmt.Sprintf("Latest tag installed is w_%s_%s", string(localMatches[0][1]), string(localMatches[0][2]))
