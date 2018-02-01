@@ -80,9 +80,6 @@ func getLocalVersion(c chan string) {
             return f > s
         }
     })
-    for _,entry := range localMatches {
-        fmt.Println(string(entry[1]), string(entry[2]))
-    }
 
     // List out the latest version of the locally installed tag
     latestLocal := fmt.Sprintf("Latest tag installed is w_%s_%s", string(localMatches[0][1]), string(localMatches[0][2]))
