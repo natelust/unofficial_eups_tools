@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -119,6 +120,39 @@ func dispatch(path string, info os.FileInfo, err error) error {
 	return nil
 }
 
+func buildTagWalk(tag string, flavor string) func(string, filepath.WalkFunc) error {
+	/*
+		This function builds a closure around a standard file walker. The closure
+		exists to find all directories which correspond to the tag specified in
+		the closure builder. These directories are then passed to the system walker.
+	*/
+	return func(path string, walkFn filepath.WalkFunc) error {
+		files, err := ioutil.ReadDir(filepath.Join(path, "ups_db"))
+		if err != nil {
+			return err
+		}
+		for _, file := range files {
+			tmpPath := filepath.Join(path, "ups_db", file.Name(), tag+".chain")
+			data, err := ioutil.ReadFile(tmpPath)
+			if err != nil {
+				continue
+			}
+			rexp, _ := regexp.Compile("VERSION = (.*)")
+			match := rexp.FindAllSubmatch(data, -1)
+			if match == nil {
+				continue
+			}
+			versionPath := filepath.Join(path, flavor, file.Name(), string(match[0][1]))
+			fmt.Println(versionPath)
+			err = filepath.Walk(versionPath, walkFn)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
 func main() {
 	/*
 	   A eups stack must be setup prior to running this script.
@@ -127,6 +161,7 @@ func main() {
 	// Get the command line switch to see if we should just list shebangs found
 	// in files
 	listFlag := flag.Bool("list", false, "Only display a list of shebangs found")
+	tagFlag := flag.String("t", "None", "Restrict shebangtron to only specified tag")
 	flag.Usage = func() {
 		helpString := `Shebangtron: Used to rewrite python path in the lsst stack.
              Must be run after sourceing loadLSST.<shell>`
@@ -169,12 +204,24 @@ func main() {
 	}
 
 	// Walk the eups path and send the paths to the dispatcher
-	totalPath := rootPath + "/" + flavor
-	err = filepath.Walk(totalPath, dispatch)
+	var totalPath string
+	var walker func(string, filepath.WalkFunc) error
+	if strings.Compare(*tagFlag, "None") == 0 {
+		// look at the entire path
+		totalPath = filepath.Join(rootPath, flavor)
+		walker = filepath.Walk
+	} else {
+		fmt.Println("in else")
+		// Look only at directories included with specified tag
+		totalPath = rootPath
+		walker = buildTagWalk(*tagFlag, flavor)
+	}
+	err = walker(totalPath, dispatch)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 	fmt.Println("Shebang successfully updated")
 	close(channel)
 }
