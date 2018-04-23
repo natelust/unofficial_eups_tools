@@ -161,6 +161,7 @@ func main() {
 	// in files
 	listFlag := flag.Bool("list", false, "Only display a list of shebangs found")
 	tagFlag := flag.String("t", "None", "Restrict shebangtron to only specified tag")
+    pathFlag := flag.String("p", "None", "Specify path to run on instead of EUPS_PATH")
 	flag.Usage = func() {
 		helpString := `Shebangtron: Used to rewrite python path in the lsst stack.
              Must be run after sourceing loadLSST.<shell>`
@@ -169,32 +170,56 @@ func main() {
 	}
 
 	flag.Parse()
-	// Get the root directory under which the stack is installed
-	rootPath := os.Getenv("EUPS_PATH")
-	flavorOutput := &bytes.Buffer{}
-	flavorCmd := exec.Command("eups", "flavor")
-	flavorCmd.Stdout = flavorOutput
-	flavErr := flavorCmd.Run()
-	if flavErr != nil {
-		fmt.Println(flavErr)
-		os.Exit(1)
-	}
-	flavor := string(flavorOutput.Bytes())
-	flavor = strings.Replace(flavor, "\n", "", 1)
+
+    // Check the condition of each of the switches, as they are mutually exclusive and save
+    // them for future use
+    tagIsSet := strings.Compare(*tagFlag, "None") != 0
+    pathIsSet := strings.Compare(*pathFlag, "None") !=0
+
+    // Bail out if both are set
+    if tagIsSet && pathIsSet {
+        fmt.Println("Both tag and path cannot be set, as tags must be found under EUPS_PATH")
+        os.Exit(1)
+    }
+
+    // if the path is set, no need to look up any path information as it is all provided
+    var rootPath, totalPath, flavor string
+    if pathIsSet {
+        totalPath = *pathFlag
+    } else {
+	    // Get the root directory under which the stack is installed
+	    rootPath = os.Getenv("EUPS_PATH")
+	    flavorOutput := &bytes.Buffer{}
+	    flavorCmd := exec.Command("eups", "flavor")
+	    flavorCmd.Stdout = flavorOutput
+	    flavErr := flavorCmd.Run()
+	    if flavErr != nil {
+            fmt.Println(flavErr)
+            os.Exit(1)
+	    }
+	    flavor = string(flavorOutput.Bytes())
+	    flavor = strings.Replace(flavor, "\n", "", 1)
+        if tagIsSet {
+            totalPath = rootPath
+        } else {
+            totalPath = filepath.Join(rootPath, flavor)
+        }
+    }
+
 	// Determine from the system the proper path path for python is
 	cmdOutput := &bytes.Buffer{}
 	cmd := exec.Command("which", "python")
 	cmd.Stdout = cmdOutput
 	err := cmd.Run()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	newPython := cmdOutput.Bytes()
 	newPython = bytes.Trim(newPython, "\n")
 	// Prepend the #! to the python path
 	shbang := []byte("#!")
 	newPython = append(shbang[:], newPython[:]...)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
 
 	// Start the worker processes
 	numWorkers := 10
@@ -203,17 +228,13 @@ func main() {
 	}
 
 	// Walk the eups path and send the paths to the dispatcher
-	var totalPath string
 	var walker func(string, filepath.WalkFunc) error
-	if strings.Compare(*tagFlag, "None") == 0 {
-		// look at the entire path
-		totalPath = filepath.Join(rootPath, flavor)
-		walker = filepath.Walk
-	} else {
-		// Look only at directories included with specified tag
-		totalPath = rootPath
-		walker = buildTagWalk(*tagFlag, flavor)
-	}
+    if tagIsSet {
+        walker = buildTagWalk(*tagFlag, flavor)
+    } else {
+        walker = filepath.Walk
+    }
+
 	err = walker(totalPath, dispatch)
 	if err != nil {
 		fmt.Println(err)
