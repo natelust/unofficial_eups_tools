@@ -143,7 +143,6 @@ func buildTagWalk(tag string, flavor string) func(string, filepath.WalkFunc) err
 				continue
 			}
 			versionPath := filepath.Join(path, flavor, file.Name(), string(match[0][1]))
-			fmt.Println(versionPath)
 			err = filepath.Walk(versionPath, walkFn)
 			if err != nil {
 				return err
@@ -211,7 +210,6 @@ func main() {
 		totalPath = filepath.Join(rootPath, flavor)
 		walker = filepath.Walk
 	} else {
-		fmt.Println("in else")
 		// Look only at directories included with specified tag
 		totalPath = rootPath
 		walker = buildTagWalk(*tagFlag, flavor)
